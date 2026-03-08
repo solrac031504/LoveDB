@@ -3,7 +3,7 @@ name: LoveDB Build Only
 on:
   pull_request:
     branches:
-      - main
+      - master
     types:
       - opened
       - synchronize
@@ -42,7 +42,7 @@ jobs:
           # Find the file
           $root = Get-Location
 
-          $sqlprojPath = Get-ChildItem -Path $root -Filter "MusicDB.sqlproj" -Recurse
+          $sqlprojPath = Get-ChildItem -Path $root -Filter "LoveDB.sqlproj" -Recurse
 
           if ($sqlprojPath)
           {
