@@ -1,0 +1,61 @@
+name: LoveDB Build Only
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  build-only:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Restore NuGet Packages
+        run: |
+          # Find the file First
+          $root = Get-Location
+
+          $slnxPath = Get-ChildItem -Path $root -Filter "LoveDB.slnx" -Recurse
+
+          if ($slnxPath)
+          {
+            Write-Host "Restoring nuget packages using $($slnxPath.FullName)"
+          }
+          else
+          {
+            Write-Error "No file found"
+            exit 1
+          }
+
+          nuget restore "$($slnxPath.FullName)" || true
+
+      - name: Build Database Project
+        run: |
+          # Find the file
+          $root = Get-Location
+
+          $sqlprojPath = Get-ChildItem -Path $root -Filter "MusicDB.sqlproj" -Recurse
+
+          if ($sqlprojPath)
+          {
+            Write-Host "Building SQL DB Project $($sqlprojPath.FullName)"
+          }
+          else
+          {
+            Write-Error "No file found"
+            exit 1
+          }
+
+          msbuild "$($sqlprojPath.FullName)" `
+            /p:Configuration=Release `
+            /p:SqlTargetName=LoveDB `
+            /p:OutDir="$(Get-Location)\LoveDB\bin\Release\" `
+            /p:CreateScriptDatabase=true
