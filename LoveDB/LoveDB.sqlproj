@@ -66,6 +66,9 @@
     <Folder Include="dbo\Functions" />
   </ItemGroup>
   <ItemGroup>
+    <Build Include="dbo\Tables\schema_migrations.sql" />
+  </ItemGroup>
+  <ItemGroup>
     <Build Include="dbo\Tables\UserLogin.sql" />
     <Build Include="dbo\Tables\Complaint.sql" />
     <Build Include="dbo\Tables\Outing.sql" />
