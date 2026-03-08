@@ -1,0 +1,6 @@
+﻿CREATE TABLE [dbo].[Outing]
+(
+	OutingId INT IDENTITY(1, 1) NOT NULL
+	, CONSTRAINT [PK_Outing] PRIMARY KEY CLUSTERED (OutingId ASC)
+);
+GO
