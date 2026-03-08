@@ -1,13 +1,14 @@
 ﻿CREATE TABLE [dbo].[Outing]
 (
-	OutingId			INT IDENTITY(1, 1)	NOT NULL
-	, OutingActivity	NVARCHAR(4000)		NOT NULL
-	, OutingLocation	GEOGRAPHY			NOT NULL
-	, OutingDate		DATE				NOT NULL
-	, CreatedUtc		DATETIME			NOT NULL CONSTRAINT [DF_Outing_CreatedUtc] DEFAULT (GETUTCDATE())
-	, CreatedBy			NVARCHAR(255)		NOT NULL CONSTRAINT [DF_Outing_CreatedBy] DEFAULT (SUSER_SNAME())
-	, ModifiedUtc		DATETIME				NULL
-	, ModifiedBy		NVARCHAR(255)			NULL
+	OutingId				INT IDENTITY(1, 1)	NOT NULL
+	, OutingTypeId			INT					NOT NULL
+	, OutingDescription		NVARCHAR(4000)		NOT NULL
+	, OutingLocation		GEOGRAPHY			NOT NULL
+	, OutingDate			DATE				NOT NULL
+	, CreatedUtc			DATETIME			NOT NULL CONSTRAINT [DF_Outing_CreatedUtc] DEFAULT (GETUTCDATE())
+	, CreatedBy				NVARCHAR(255)		NOT NULL CONSTRAINT [DF_Outing_CreatedBy] DEFAULT (SUSER_SNAME())
+	, ModifiedUtc			DATETIME				NULL
+	, ModifiedBy			NVARCHAR(255)			NULL
 	, CONSTRAINT [PK_Outing] PRIMARY KEY CLUSTERED (OutingId ASC)
 );
 GO
