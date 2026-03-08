@@ -1,0 +1,323 @@
+name: LoveDB Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.github/**'
+
+jobs:
+  build-and-validate:
+    runs-on: windows-latest
+    outputs:
+      dacpac-path: ${{ steps.find-dacpac.outputs.dacpac-path }}
+      script-generated: ${{ steps.generate-script.outputs.success }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Restore NuGet Packages
+        run: |
+          # Find the file First
+          $root = Get-Location
+
+          $slnxPath = Get-ChildItem -Path $root -Filter "LoveDB.slnx" -Recurse
+
+          if ($slnxPath)
+          {
+            Write-Host "Restoring nuget packages using $($slnxPath.FullName)"
+          }
+          else
+          {
+            Write-Error "No file found"
+            exit 1
+          }
+
+          nuget restore "$($slnxPath.FullName)" || true
+
+      - name: Build Database Project
+        run: |
+          # Find the file
+          $root = Get-Location
+
+          $sqlprojPath = Get-ChildItem -Path $root -Filter "LoveDB.sqlproj" -Recurse
+
+          if ($sqlprojPath)
+          {
+            Write-Host "Building SQL DB Project $($sqlprojPath.FullName)"
+          }
+          else
+          {
+            Write-Error "No file found"
+            exit 1
+          }
+
+          msbuild "$($sqlprojPath.FullName)" `
+            /p:Configuration=Release `
+            /p:SqlTargetName=LoveDB `
+            /p:OutDir="$(Get-Location)\LoveDB\bin\Release\" `
+            /p:CreateScriptDatabase=true
+
+      - name: Find Dacpac File
+        id: find-dacpac
+        run: |
+          $dacpac = Get-ChildItem -Path . -Filter "*.dacpac" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          if ($dacpac) {
+            echo "dacpac-path=$dacpac" >> $env:GITHUB_OUTPUT
+            echo "Found dacpac: $dacpac"
+          } else {
+            echo "No dacpac file found"
+            exit 1
+          }
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create Firewall rule
+        id: firewall
+        shell: pwsh
+        run: |
+          # Add runner IP to the firewall rule
+          $ip = (Invoke-RestMethod -Uri "https://api.ipify.org").Trim()
+          $ruleName = "gha-run-${{ github.run_id }}"
+
+          # Add firewall rule
+          az sql server firewall-rule create `
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} `
+            --server ${{ secrets.AZURE_SQL_SERVER_NAME }} `
+            --name "$ruleName" `
+            --start-ip-address "$ip" `
+            --end-ip-address "$ip"
+
+          # Save output
+          echo "rule-name=$ruleName" >> $env:GITHUB_OUTPUT
+
+      - name: Generate Deploy Report
+        id: generate-report
+        env:
+          SQL_PACKAGE_PATH: "C:\\Program Files\\Microsoft SQL Server\\170\\DAC\\bin\\sqlpackage.exe"
+        run: |
+          # Find sqlpackage if not in default location
+          if (-not (Test-Path $env:SQL_PACKAGE_PATH)) 
+          {
+            $sqlPackage = Get-ChildItem -Path "C:\" -Filter "sqlpackage.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+
+            if ($sqlPackage)
+            {
+              Write-Host "Generating SQL Script with $($sqlPackage.FullName)"
+              $env:SQL_PACKAGE_PATH = $sqlPackage
+            }
+            else
+            {
+              Write-Error "No file found"
+            }
+          }
+
+          # Logging var
+          $generateDateTime = (Get-Date -Format "yyyy-MM-dd_HHmmss")
+          $outputFileName = "LoveDB_DeployReport_$generateDateTime.xml"
+          
+          # Generate SQL script
+          & "$env:SQL_PACKAGE_PATH" /Action:DeployReport `
+            /SourceFile:"${{ steps.find-dacpac.outputs.dacpac-path }}" `
+            /TargetConnectionString:"${{ secrets.AZURE_SQL_CONNECTION_STRING }}" `
+            /OutputPath:"$outputFileName" `
+            /p:BlockOnPossibleDataLoss=false `
+            /p:CreateNewDatabase=false `
+            /p:DropObjectsNotInSource=true `
+            /p:ExcludeObjectTypes="ApplicationRoles;DatabaseRoles;Permissions;RoleMembership;Credentials;DatabaseScopedCredentials;LinkedServerLogins;LinkedServers;Logins;Users;" `
+            /p:ScriptDatabaseOptions=false
+          
+          # Verify script was created
+          if (Test-Path $outputFileName) {
+            $lineCount = (Get-Content $outputFileName | Measure-Object -Line).Lines
+            echo "Generated script with $lineCount lines"
+            echo "success=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "Script generation failed"
+            exit 1
+          }
+
+          echo "deployment-report=$outputFileName" >> $env:GITHUB_OUTPUT
+
+      - name: Cleanup Firewall rule
+        if: always()
+        shell: pwsh
+        run: |
+          # Remove created firewall rule
+          az sql server firewall-rule delete `
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} `
+            --server ${{ secrets.AZURE_SQL_SERVER_NAME }} `
+            --name "${{ steps.firewall.outputs.rule-name }}"
+
+      - name: Print Report
+        run: |
+          # Get the contents
+          $reportPath = "${{ steps.generate-report.outputs.deployment-report }}"
+
+          # Test the path
+          if (!(Test-Path $reportPath))
+          {
+            Write-Error "No report found at $reportPath"
+            exit 1
+          }
+
+          # Read in content
+          [xml]$xml = Get-Content $reportPath
+
+          # Format the alerts
+          $alerts = $xml.DeploymentReport.Alerts.Alert | ForEach-Object {
+            $alertName = $_.Name
+            $_.Issue | ForEach-Object {
+              [PSCustomObject]@{
+                'Alert Type' = $alertName
+                'Issue' = $_.Value
+                'Id' = $_.Id
+              }
+            }
+          }
+
+          # Format the operations
+          $operations = $xml.DeploymentReport.Operations.Operation | ForEach-Object {
+            $operationName = $_.Name
+            $_.Item | ForEach-Object {
+              [PSCustomObject]@{
+                'Operation Type' = $operationName
+                'Item' = $_.Value
+                'Type' = $_.Type
+              }
+            }
+          }
+
+          # Create markdown content
+          $markdownContent = "# Database Deployment Report`n"
+          $markdownContent += "## Alerts`n`n"
+          $markdownContent += "| Alert Type | Issue | Id |`n"
+          $markdownContent += "|------------|-------|----|`n"
+
+          if ($alerts -and $alerts.Count -gt 0)
+          {
+            foreach($alert in $alerts)
+            {
+              $alertType = ($alert.'Alert Type' -replace '\|', '\|') -replace '\r?\n', ' '
+              $issue = ($alert.Issue -replace '\|', '\|') -replace '\r?\n', ' '
+              $id = ($alert.Id -replace '\|', '\|') -replace '\r?\n', ' '
+              $markdownContent += "| $alertType | $issue | $id |`n"
+            }
+          }
+
+          $markdownContent += "`n## Operations`n`n"
+          $markdownContent += "| Operation Type | Item | Type |`n"
+          $markdownContent += "|----------------|------|------|`n"
+
+          if ($operations -and $operations.Count -gt 0)
+          {
+            foreach($operation in $operations)
+            {
+              $operationType = ($operation.'Operation Type' -replace '\|', '\|') -replace '\r?\n', ' '
+              $item = ($operation.Item -replace '\|', '\|') -replace '\r?\n', ' '
+              $type = ($operation.Type -replace '\|', '\|') -replace '\r?\n', ' '
+              $markdownContent += "| $operationType | $item | $type |`n"
+            }
+          }
+
+          echo $markdownContent >> $GITHUB_STEP_SUMMARY
+
+          # Print in the pipeline as well
+          Write-Host "Alerts"
+          $alerts | Format-Table -AutoSize
+
+          Write-Host "Operations"
+          $operations | Format-Table -AutoSize          
+
+      - name: Upload Script for Review
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-report
+          path: "${{ steps.generate-report.outputs.deployment-report }}"
+          retention-days: 7
+
+      - name: Upload Dacpac Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-dacpac
+          path: ${{ steps.find-dacpac.outputs.dacpac-path }}
+          retention-days: 7
+
+  deploy:
+    needs: build-and-validate
+    runs-on: windows-latest
+    environment: production
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: database-dacpac
+
+      - name: Download Deployment Report
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-report
+          
+      - name: Find Downloaded Dacpac
+        id: find-downloaded-dacpac
+        run: |
+          $dacpac = Get-ChildItem -Path . -Filter "*.dacpac" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          if ($dacpac) {
+            echo "dacpac-path=$dacpac" >> $env:GITHUB_OUTPUT
+            echo "Found dacpac for deployment: $dacpac"
+          } else {
+            echo "No dacpac file found after download"
+            exit 1
+          }
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create Firewall rule
+        id: firewall
+        shell: pwsh
+        run: |
+          # Add runner IP to the firewall rule
+          $ip = (Invoke-RestMethod -Uri "https://api.ipify.org").Trim()
+          $ruleName = "gha-run-${{ github.run_id }}"
+
+          # Add firewall rule
+          az sql server firewall-rule create `
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} `
+            --server ${{ secrets.AZURE_SQL_SERVER_NAME }} `
+            --name "$ruleName" `
+            --start-ip-address "$ip" `
+            --end-ip-address "$ip"
+
+          # Save output
+          echo "rule-name=$ruleName" >> $env:GITHUB_OUTPUT
+
+      - name: Deploy to Azure SQL
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: ${{ steps.find-downloaded-dacpac.outputs.dacpac-path }}
+          action: 'publish'
+          arguments: '/p:BlockOnPossibleDataLoss=false /p:CreateNewDatabase=false /p:DropObjectsNotInSource=true /p:ExcludeObjectTypes="ApplicationRoles;DatabaseRoles;Permissions;RoleMembership;Credentials;DatabaseScopedCredentials;LinkedServerLogins;LinkedServers;Logins;Users;" /p:ScriptDatabaseOptions=false /p:IncludeCompositeObjects=true'
+
+      - name: Cleanup Firewall rule
+        if: always()
+        shell: pwsh
+        run: |
+          # Remove created firewall rule
+          az sql server firewall-rule delete `
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} `
+            --server ${{ secrets.AZURE_SQL_SERVER_NAME }} `
+            --name "${{ steps.firewall.outputs.rule-name }}"
+
+      - name: Azure Logout
+        run: |
+          az logout
+        if: always()
