@@ -13,10 +13,18 @@
 );
 GO
 
+-- *************************
+-- INDEXES
+-- *************************
+
 CREATE UNIQUE NONCLUSTERED INDEX [UX_UserLogin_Username]
 ON [dbo].[UserLogin] (Username)
 INCLUDE (LoginPwd);
 GO
+
+-- *************************
+-- TRIGGERS
+-- *************************
 
 CREATE TRIGGER [dbo].[TR_UserLogin_Modification]
 ON [dbo].[UserLogin]
