@@ -235,14 +235,14 @@ jobs:
           $operations | Format-Table -AutoSize          
 
       - name: Upload Script for Review
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-report
           path: "${{ steps.generate-report.outputs.deployment-report }}"
           retention-days: 7
 
       - name: Upload Dacpac Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: database-dacpac
           path: ${{ steps.find-dacpac.outputs.dacpac-path }}
