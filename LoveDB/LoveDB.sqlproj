@@ -67,5 +67,20 @@
   </ItemGroup>
   <ItemGroup>
     <Build Include="dbo\Tables\schema_migrations.sql" />
+    <Build Include="dbo\Tables\ComplaintType.sql" />
+    <Build Include="dbo\Tables\OutingType.sql" />
+    <Build Include="dbo\Stored Procedures\LoginUser.sql" />
+  </ItemGroup>
+  <ItemGroup>
+    <Build Include="dbo\Tables\UserLogin.sql" />
+    <Build Include="dbo\Tables\Complaint.sql" />
+    <Build Include="dbo\Tables\Outing.sql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ArtifactReference Include="$(DacPacRootPath)\Extensions\Microsoft\SQLDB\Extensions\SqlServer\AzureV12\SqlSchemas\master.dacpac">
+      <HintPath>$(DacPacRootPath)\Extensions\Microsoft\SQLDB\Extensions\SqlServer\AzureV12\SqlSchemas\master.dacpac</HintPath>
+      <SuppressMissingDependenciesErrors>True</SuppressMissingDependenciesErrors>
+      <DatabaseVariableLiteralValue>master</DatabaseVariableLiteralValue>
+    </ArtifactReference>
   </ItemGroup>
 </Project>

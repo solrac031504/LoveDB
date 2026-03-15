@@ -1,0 +1,11 @@
+﻿CREATE TABLE [dbo].[OutingType]
+(
+	OutingTypeId	INT IDENTITY(1, 1)	NOT NULL
+	, OutingType	NVARCHAR(255)		NOT NULL
+	, CreatedUtc	DATETIME			NOT NULL CONSTRAINT [DF_OutingType_CreatedUtc] DEFAULT(GETUTCDATE())
+	, CreatedBy		NVARCHAR(255)		NOT NULL CONSTRAINT [DF_OutingType_CreatedBy] DEFAULT (SUSER_SNAME())
+	, ModifiedUtc	DATETIME				NULL
+	, ModifiedBy	NVARCHAR(255)			NULL
+	, CONSTRAINT [PK_OutingType] PRIMARY KEY CLUSTERED (OutingTypeId)
+);
+GO
