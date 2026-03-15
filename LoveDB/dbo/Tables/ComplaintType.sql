@@ -6,5 +6,6 @@
 	, CreatedBy			NVARCHAR(255)		NOT NULL CONSTRAINT [DF_ComplaintType_CreatedBy] DEFAULT (SUSER_SNAME())
 	, ModifiedUtc		DATETIME				NULL
 	, ModifiedBy		NVARCHAR(255)			NULL
+	, CONSTRAINT [PK_ComplaintType] PRIMARY KEY CLUSTERED (ComplaintTypeId)
 );
 GO

@@ -1,15 +1,15 @@
 ﻿CREATE TABLE [dbo].[UserLogin]
 (
-	UserLogin		INT IDENTITY(1, 1)	NOT NULL
-	, Username		NVARCHAR(255)		NOT NULL
-	, LoginPwd		BINARY(32)			NOT NULL
-	, LoginCount	INT					NOT NULL CONSTRAINT [DF_UserLogin_LoginCount] DEFAULT ((0))
-	, LastLogin		DATETIME				NULL
-	, CreatedUtc	DATETIME			NOT NULL CONSTRAINT [DF_UserLogin_CreatedUtc] DEFAULT (GETUTCDATE())
-	, CreatedBy		NVARCHAR(255)		NOT NULL CONSTRAINT [DF_UserLogin_CreatedBy] DEFAULT (SUSER_SNAME())
-	, ModifiedUtc	DATETIME				NULL
-	, ModifiedBy	NVARCHAR(255)			NULL
-	, CONSTRAINT [PK_UserLogin] PRIMARY KEY CLUSTERED (UserLogin ASC)
+	UserLoginId			INT IDENTITY(1, 1)	NOT NULL
+	, Username			NVARCHAR(255)		NOT NULL
+	, LoginPwd			BINARY(32)			NOT NULL
+	, LoginCount		INT					NOT NULL CONSTRAINT [DF_UserLogin_LoginCount] DEFAULT ((0))
+	, LastLoginDate		DATETIME				NULL
+	, CreatedUtc		DATETIME			NOT NULL CONSTRAINT [DF_UserLogin_CreatedUtc] DEFAULT (GETUTCDATE())
+	, CreatedBy			NVARCHAR(255)		NOT NULL CONSTRAINT [DF_UserLogin_CreatedBy] DEFAULT (SUSER_SNAME())
+	, ModifiedUtc		DATETIME				NULL
+	, ModifiedBy		NVARCHAR(255)			NULL
+	, CONSTRAINT [PK_UserLogin] PRIMARY KEY CLUSTERED (UserLoginId ASC)
 );
 GO
 
@@ -40,7 +40,7 @@ SET
 FROM
 	dbo.UserLogin AS ul
 	JOIN INSERTED AS i
-		ON ul.UserLogin = i.UserLogin
+		ON ul.UserLoginId = i.UserLoginId
 ;
 
 END;

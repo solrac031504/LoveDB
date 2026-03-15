@@ -32,5 +32,5 @@ GO
 ALTER TABLE [dbo].[Complaint]
 ADD CONSTRAINT [FK_Complaint_ComplaintTypeId]
 FOREIGN KEY (ComplaintTypeId)
-REFERENCES [dbo].[Complaint] (ComplaintTypeId);
+REFERENCES [dbo].[ComplaintType] (ComplaintTypeId);
 GO
